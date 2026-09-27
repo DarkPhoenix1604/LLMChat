@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cf-ai-memory-chat",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Chat UI (static HTML/JS/CSS). Requests that don't match a file fall through to the Worker.
+  "assets": { "directory": "./public" },
+
+  // Workers AI — Llama 3.3
+  "ai": { "binding": "AI" },
+
+  // One Durable Object per chat session: holds messages + long-term memory in SQLite
+  "durable_objects": {
+    "bindings": [{ "name": "CHAT_SESSION", "class_name": "ChatSession" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChatSession"] }],
+
+  // Durable, retried background job that distills the conversation into memory
+  "workflows": [
+    { "name": "memory-workflow", "binding": "MEMORY_WORKFLOW", "class_name": "MemoryWorkflow" }
+  ],
+
+  "observability": { "enabled": true }
+}

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Recall — AI chat with memory</title>
+	<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+	<div class="app">
+		<main class="chat">
+			<header class="chat-header">
+				<div>
+					<h1>Recall</h1>
+					<p class="subtitle">Llama 3.3 on Workers AI · remembers you across the conversation</p>
+				</div>
+				<button id="reset" class="ghost" type="button">New chat</button>
+			</header>
+
+			<section id="messages" class="messages" aria-live="polite">
+				<div id="empty" class="empty">
+					<p>Say hi and tell me something about yourself — your name, what you're building, what you like.</p>
+					<p>Every few messages a Cloudflare Workflow distills the chat into long-term memory (see the panel).</p>
+				</div>
+			</section>
+
+			<form id="composer" class="composer">
+				<textarea id="input" rows="1" placeholder="Message Recall…" maxlength="4000" required></textarea>
+				<button id="send" type="submit">Send</button>
+			</form>
+		</main>
+
+		<aside class="memory">
+			<div class="memory-header">
+				<h2>Memory</h2>
+				<span id="wf-status" class="badge" hidden></span>
+			</div>
+			<p class="muted small" id="memory-updated">Nothing remembered yet.</p>
+
+			<h3>Summary</h3>
+			<p id="summary" class="muted">—</p>
+
+			<h3>Facts</h3>
+			<ul id="facts" class="facts"></ul>
+
+			<button id="refresh" class="ghost wide" type="button">Update memory now</button>
+			<p class="muted small">Stored in a Durable Object (SQLite). Updated by the <code>MemoryWorkflow</code>.</p>
+		</aside>
+	</div>
+	<script src="/app.js"></script>
+</body>
+</html>
