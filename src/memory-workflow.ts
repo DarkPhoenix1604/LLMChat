@@ -38,6 +38,12 @@ export class MemoryWorkflow extends WorkflowEntrypoint<Env, MemoryWorkflowParams
 			};
 		});
 
+		// The chat may have been reset after this run was queued. With an empty transcript the
+		// LLM would make memory up, so keep what is there and stop.
+		if (!snapshot.transcript) {
+			return { summary: snapshot.summary, facts: snapshot.facts };
+		}
+
 		const distilled = await step.do(
 			"distill memory with llm",
 			{ retries: { limit: 3, delay: "5 seconds", backoff: "exponential" }, timeout: "2 minutes" },

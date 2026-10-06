@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { MODEL, buildSystemPrompt, parseSseToken, type ChatMessage, type Memory } from "./llm";
+import { MODEL, buildSystemPrompt, parseSseToken, stripMoodTag, type ChatMessage, type Memory } from "./llm";
 
 /** How many recent messages are sent to the LLM as short-term context. */
 const CONTEXT_WINDOW = 20;
@@ -34,25 +34,25 @@ export class ChatSession extends DurableObject<Env> {
 		`);
 	}
 
-	/** Stores the user message, streams the LLM reply back, and persists it once complete. */
-	async chat(sessionId: string, userMessage: string): Promise<ReadableStream<Uint8Array>> {
+	/**
+	 * Stores the user message, streams the LLM reply back, and persists it when the stream ends.
+	 * `voice` asks for a short, spoken-style reply, because it will be read aloud.
+	 */
+	async chat(sessionId: string, userMessage: string, voice = false): Promise<ReadableStream<Uint8Array>> {
 		this.addMessage("user", userMessage);
 
 		const messages = [
-			{ role: "system" as const, content: buildSystemPrompt(this.getMemory()) },
+			{ role: "system" as const, content: buildSystemPrompt(this.getMemory(), { voice }) },
 			...this.getMessages(CONTEXT_WINDOW).map(({ role, content }) => ({ role, content })),
 		];
 
 		const aiStream = (await this.env.AI.run(MODEL, {
 			messages,
 			stream: true,
-			max_tokens: 1024,
+			max_tokens: voice ? 300 : 1024,
 		})) as ReadableStream<Uint8Array>;
 
-		// One branch goes to the browser, the other is read here to save the full reply.
-		const [toClient, toStore] = aiStream.tee();
-		this.ctx.waitUntil(this.persistReply(sessionId, toStore));
-		return toClient;
+		return this.relayReply(sessionId, aiStream, voice);
 	}
 
 	getMessages(limit = 100): ChatMessage[] {
@@ -93,8 +93,12 @@ export class ChatSession extends DurableObject<Env> {
 			.workflow_id;
 	}
 
-	/** Starts a MemoryWorkflow run for this session and remembers its id. */
-	async refreshMemory(sessionId: string): Promise<string> {
+	/**
+	 * Starts a MemoryWorkflow run for this session and remembers its id.
+	 * Returns null for an empty chat: with nothing to distill, the LLM tends to invent memory.
+	 */
+	async refreshMemory(sessionId: string): Promise<string | null> {
+		if (this.messageCount() === 0) return null;
 		const instance = await this.env.MEMORY_WORKFLOW.create({ params: { sessionId } });
 		this.sql.exec("UPDATE memory SET workflow_id = ? WHERE id = 1", instance.id);
 		return instance.id;
@@ -109,25 +113,58 @@ export class ChatSession extends DurableObject<Env> {
 		this.sql.exec("INSERT INTO messages (role, content, created_at) VALUES (?, ?, ?)", role, content, Date.now());
 	}
 
-	private async persistReply(sessionId: string, stream: ReadableStream<Uint8Array>): Promise<void> {
-		const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+	private messageCount(): number {
+		return this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM messages").one().n;
+	}
+
+	/**
+	 * Passes the Workers AI stream through to the browser while collecting the reply text, and
+	 * saves the reply when the stream ends. If the browser cancels (Stop button, closed tab),
+	 * generation is cancelled too and the partial reply the user saw is saved instead.
+	 */
+	private relayReply(sessionId: string, source: ReadableStream<Uint8Array>, voice: boolean): ReadableStream<Uint8Array> {
+		const reader = source.getReader();
+		const decoder = new TextDecoder();
 		let buffer = "";
 		let reply = "";
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			buffer += value;
-			const lines = buffer.split("\n");
-			buffer = lines.pop() ?? "";
-			for (const line of lines) reply += parseSseToken(line);
-		}
-		reply += parseSseToken(buffer);
+		let saved = false;
+		const save = async () => {
+			if (saved) return;
+			saved = true;
+			const text = reply + parseSseToken(buffer);
+			await this.saveReply(sessionId, voice ? stripMoodTag(text) : text);
+		};
+
+		return new ReadableStream<Uint8Array>({
+			pull: async (controller) => {
+				const { done, value } = await reader.read().catch(async (err) => {
+					await save();
+					throw err;
+				});
+				if (done) {
+					controller.close();
+					await save();
+					return;
+				}
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split("\n");
+				buffer = lines.pop() ?? "";
+				for (const line of lines) reply += parseSseToken(line);
+				controller.enqueue(value);
+			},
+			cancel: async (reason) => {
+				await reader.cancel(reason).catch(() => {});
+				await save();
+			},
+		});
+	}
+
+	private async saveReply(sessionId: string, reply: string): Promise<void> {
 		if (!reply.trim()) return;
 
 		this.addMessage("assistant", reply.trim());
 
-		const count = this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM messages").one().n;
-		if (count % MEMORY_EVERY === 0) {
+		if (this.messageCount() % MEMORY_EVERY === 0) {
 			await this.refreshMemory(sessionId);
 		}
 	}

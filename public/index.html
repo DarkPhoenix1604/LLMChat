@@ -21,13 +21,39 @@
 				<div id="empty" class="empty">
 					<p>Say hi and tell me something about yourself — your name, what you're building, what you like.</p>
 					<p>Every few messages a Cloudflare Workflow distills the chat into long-term memory (see the panel).</p>
+					<div class="starters">
+						<button class="chip accent" type="button" data-action="talk">Start a voice conversation</button>
+						<button class="chip" type="button">What do you remember about me?</button>
+						<button class="chip" type="button">Help me plan my week</button>
+						<button class="chip" type="button">Explain Durable Objects simply</button>
+					</div>
 				</div>
 			</section>
 
 			<form id="composer" class="composer">
 				<textarea id="input" rows="1" placeholder="Message Recall…" maxlength="4000" required></textarea>
+				<button id="mic" class="ghost icon" type="button" aria-label="Record a voice message" title="Dictate" hidden>
+					<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+						<path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z" />
+					</svg>
+				</button>
+				<button id="talk" class="ghost icon" type="button" aria-label="Start a voice conversation" title="Voice conversation" hidden>
+					<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+						<path fill="currentColor" d="M7 9h2v6H7zm4-4h2v14h-2zm4 3h2v8h-2zM3 11h2v2H3zm16 0h2v2h-2z" />
+					</svg>
+				</button>
 				<button id="send" type="submit">Send</button>
+				<button id="stop" class="ghost" type="button" hidden>Stop</button>
 			</form>
+
+			<section id="voice" class="voice" hidden aria-live="polite">
+				<canvas id="eyes" class="eyes" aria-hidden="true" title="Double-click to make the eyes bigger"></canvas>
+				<div class="voice-text">
+					<p id="voice-status" class="voice-status">Listening…</p>
+					<p class="voice-hint muted small">Just talk, and pause when you're done. Talk over Recall to interrupt. Double-click the eyes to go big. Esc ends.</p>
+				</div>
+				<button id="voice-end" class="ghost" type="button">End</button>
+			</section>
 		</main>
 
 		<aside class="memory">
@@ -47,6 +73,6 @@
 			<p class="muted small">Stored in a Durable Object (SQLite). Updated by the <code>MemoryWorkflow</code>.</p>
 		</aside>
 	</div>
-	<script src="/app.js"></script>
+	<script type="module" src="/app.js"></script>
 </body>
 </html>

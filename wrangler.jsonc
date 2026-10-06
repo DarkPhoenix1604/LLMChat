@@ -22,5 +22,13 @@
     { "name": "memory-workflow", "binding": "MEMORY_WORKFLOW", "class_name": "MemoryWorkflow" }
   ],
 
+  // Per-IP limits on the endpoints that call Workers AI, so nobody can burn through the quota
+  "ratelimits": [
+    { "name": "CHAT_LIMITER", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
+    { "name": "MEMORY_LIMITER", "namespace_id": "1002", "simple": { "limit": 5, "period": 60 } },
+    { "name": "VOICE_LIMITER", "namespace_id": "1003", "simple": { "limit": 30, "period": 60 } },
+    { "name": "SPEECH_LIMITER", "namespace_id": "1004", "simple": { "limit": 60, "period": 60 } }
+  ],
+
   "observability": { "enabled": true }
 }
